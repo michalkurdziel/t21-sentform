@@ -47,12 +47,18 @@
   </div>
 
   <script>
+    // Wstaw swój klucz API poniżej:
+    const API_KEY = 'a9B3X7cQ8mZ1rL5tE2vW6nUyP0JhKdFo'; // <-- podmień na swój klucz
+
+    // Wstaw adres webhooka poniżej:
+    const WEBHOOK_URL = 'https://hook.eu1.make.com/vcncszfcuajnnlqacdnyut9cbhqi1wxe'; // <-- podmień na swój adres
+
     const form = document.getElementById('uploadForm');
     const resultDiv = document.getElementById('result');
 
     form.addEventListener('submit', async function(e) {
       e.preventDefault();
-      resultDiv.innerHTML = ''; // Clear previous result
+      resultDiv.innerHTML = '';
 
       const fileInput = document.getElementById('fileInput');
       if (!fileInput.files.length) {
@@ -64,21 +70,23 @@
       formData.append('file', fileInput.files[0]);
 
       try {
-        // Show loading
+        // Pokazanie spinnera na czas wysyłki
         resultDiv.innerHTML = '<div class="text-center mt-3"><div class="spinner-border" role="status"></div><div>Wysyłanie...</div></div>';
 
-        const response = await fetch('https://hook.eu1.make.com/vcncszfcuajnnlqacdnyut9cbhqi1wxe', {
+        const response = await fetch(WEBHOOK_URL, {
           method: 'POST',
-          body: formData
+          body: formData,
+          headers: {
+            'x-api-key': API_KEY
+            // NIE ustawiaj 'Content-Type' przy FormData!
+          }
         });
 
-        // Check for HTTP errors
         if (!response.ok) {
           throw new Error(`HTTP error: ${response.status}`);
         }
 
         const data = await response.json();
-        // Pretty print JSON
         resultDiv.innerHTML = `<pre class="pretty-json">${JSON.stringify(data, null, 2)}</pre>`;
       } catch (err) {
         resultDiv.innerHTML = `<div class="alert alert-danger mt-3">Błąd: ${err.message}</div>`;
