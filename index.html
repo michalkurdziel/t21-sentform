@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="pl">
 <head>
@@ -15,21 +16,63 @@
       justify-content: center;
     }
     .container {
-      max-width: 500px;
+      max-width: 600px;
       background: #fff;
-      padding: 2rem 2rem 1rem 2rem;
+      padding: 2rem 2rem 1.5rem 2rem;
       border-radius: 16px;
       box-shadow: 0 4px 16px rgba(0,0,0,0.08);
     }
-    pre.pretty-json {
+    .section-label {
+      margin-top: 2rem;
+      margin-bottom: 0.5rem;
+      font-weight: bold;
+      color: #444;
+      font-size: 1.1rem;
+    }
+    pre.pretty-json, pre.pretty-json-response {
       background: #212529;
       color: #e9ecef;
       border-radius: 8px;
       padding: 1rem;
       font-size: 1rem;
-      margin-top: 1.5rem;
+      margin-top: 0.5rem;
       white-space: pre-wrap;
       word-break: break-word;
+      overflow-x: auto;
+    }
+    /* Simple JSON syntax highlighting */
+    .json-key { color: #6ec6ff; }
+    .json-string { color: #c3e88d; }
+    .json-number { color: #f78c6c; }
+    .json-boolean { color: #ffcb6b; }
+    .json-null { color: #f78c6c; font-style: italic; }
+    .json-brace { color: #82aaff; }
+    .json-colon { color: #fff; }
+    .json-comma { color: #fff; }
+    .file-preview-wrapper {
+      margin-top: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    .pdf-preview {
+      width: 100%;
+      height: 400px;
+      border: none;
+      border-radius: 8px;
+      background: #f3f3f3;
+    }
+    .img-preview {
+      display: block;
+      max-width: 100%;
+      max-height: 300px;
+      border-radius: 8px;
+      margin: 0 auto;
+      border: 1px solid #eee;
+      background: #f3f3f3;
+    }
+    .file-info {
+      font-size: 0.95rem;
+      color: #888;
+      margin-top: 0.5rem;
     }
   </style>
 </head>
@@ -38,46 +81,124 @@
     <h2 class="mb-4 text-center">Wyślij plik do webhooka</h2>
     <form id="uploadForm">
       <div class="mb-3">
-        <label for="fileInput" class="form-label">Wybierz plik</label>
-        <input class="form-control" type="file" id="fileInput" name="file" required>
+        <label for="fileInput" class="form-label">Wybierz plik (JSON, PDF, JPG, PNG)</label>
+        <input class="form-control" type="file" id="fileInput" name="file" required accept=".json,application/pdf,image/png,image/jpeg">
       </div>
       <button type="submit" class="btn btn-primary w-100">Wyślij</button>
     </form>
+    <!-- File preview area -->
+    <div class="section-label">Podgląd pliku źródłowego:</div>
+    <div id="filePreview" class="file-preview-wrapper"></div>
+    <!-- Webhook response area -->
+    <div class="section-label">Odpowiedź z webhooka:</div>
     <div id="result"></div>
   </div>
 
   <script>
     // Wstaw swój klucz API poniżej:
-    const API_KEY = 'a9B3X7cQ8mZ1rL5tE2vW6nUyP0JhKdFo'; // <-- podmień na swój klucz
-
-    // Wstaw adres webhooka poniżej:
+    const API_KEY = 'a9B3X7cQ8mZ1rL5tE2vW6nUyP0JhKdFo"'; // <-- podmień na swój klucz
     const WEBHOOK_URL = 'https://hook.eu1.make.com/vcncszfcuajnnlqacdnyut9cbhqi1wxe'; // <-- podmień na swój adres
+    const API_HEADER = 'x-make-apikey'; // <-- podmień na właściwy nagłówek jeśli potrzeba
 
     const form = document.getElementById('uploadForm');
+    const fileInput = document.getElementById('fileInput');
+    const filePreview = document.getElementById('filePreview');
     const resultDiv = document.getElementById('result');
 
+    // JSON syntax highlighting
+    function syntaxHighlight(json) {
+      if (typeof json != 'string') {
+        json = JSON.stringify(json, undefined, 2);
+      }
+      json = json
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(?:\s*:)?|\b(true|false|null)\b|-?\d+(\.\d*)?([eE][+\-]?\d+)?|[{}\[\],:])/g, function (match) {
+        let cls = 'json-number';
+        if (/^"/.test(match)) {
+          if (/:$/.test(match)) {
+            cls = 'json-key';
+          } else {
+            cls = 'json-string';
+          }
+        } else if (/true|false/.test(match)) {
+          cls = 'json-boolean';
+        } else if (/null/.test(match)) {
+          cls = 'json-null';
+        } else if (/[\{\}\[\]]/.test(match)) {
+          cls = 'json-brace';
+        } else if (/^:/.test(match)) {
+          cls = 'json-colon';
+        } else if (/^,/.test(match)) {
+          cls = 'json-comma';
+        }
+        return `<span class="${cls}">${match}</span>`;
+      });
+    }
+
+    // File preview logic
+    fileInput.addEventListener('change', function() {
+      filePreview.innerHTML = '';
+      const file = fileInput.files[0];
+      if (!file) return;
+
+      const fileType = file.type;
+      const fileName = file.name.toLowerCase();
+
+      // JSON
+      if (fileType === 'application/json' || fileName.endsWith('.json')) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          try {
+            const json = JSON.parse(e.target.result);
+            filePreview.innerHTML = `<pre class="pretty-json">${syntaxHighlight(json)}</pre>
+              <div class="file-info">Plik JSON: ${file.name} (${file.size} bajtów)</div>`;
+          } catch (err) {
+            filePreview.innerHTML = `<div class="alert alert-danger">Błąd parsowania JSON: ${err.message}</div>`;
+          }
+        };
+        reader.readAsText(file);
+      }
+      // PDF
+      else if (fileType === 'application/pdf' || fileName.endsWith('.pdf')) {
+        const url = URL.createObjectURL(file);
+        filePreview.innerHTML = `<embed src="${url}" type="application/pdf" class="pdf-preview" /> 
+          <div class="file-info">Plik PDF: ${file.name} (${file.size} bajtów)</div>`;
+      }
+      // JPG/PNG
+      else if (fileType === 'image/jpeg' || fileType === 'image/png' || fileName.match(/\.(jpe?g|png)$/)) {
+        const url = URL.createObjectURL(file);
+        filePreview.innerHTML = `<img src="${url}" alt="Podgląd obrazu" class="img-preview" />
+          <div class="file-info">Obrazek: ${file.name} (${file.size} bajtów)</div>`;
+      }
+      // Nieobsługiwany
+      else {
+        filePreview.innerHTML = `<div class="alert alert-warning">Nieobsługiwany format pliku.</div>
+          <div class="file-info">${file.name} (${file.size} bajtów)</div>`;
+      }
+    });
+
+    // Form submit & response preview logic
     form.addEventListener('submit', async function(e) {
       e.preventDefault();
       resultDiv.innerHTML = '';
 
-      const fileInput = document.getElementById('fileInput');
-      if (!fileInput.files.length) {
+      const file = fileInput.files[0];
+      if (!file) {
         resultDiv.innerHTML = '<div class="alert alert-warning mt-3">Wybierz plik przed wysłaniem.</div>';
         return;
       }
 
       const formData = new FormData();
-      formData.append('file', fileInput.files[0]);
+      formData.append('file', file);
 
       try {
-        // Pokazanie spinnera na czas wysyłki
         resultDiv.innerHTML = '<div class="text-center mt-3"><div class="spinner-border" role="status"></div><div>Wysyłanie...</div></div>';
 
         const response = await fetch(WEBHOOK_URL, {
           method: 'POST',
           body: formData,
           headers: {
-            'x-make-apikey': API_KEY
+            [API_HEADER]: API_KEY
             // NIE ustawiaj 'Content-Type' przy FormData!
           }
         });
@@ -87,7 +208,7 @@
         }
 
         const data = await response.json();
-        resultDiv.innerHTML = `<pre class="pretty-json">${JSON.stringify(data, null, 2)}</pre>`;
+        resultDiv.innerHTML = `<pre class="pretty-json-response">${syntaxHighlight(data)}</pre>`;
       } catch (err) {
         resultDiv.innerHTML = `<div class="alert alert-danger mt-3">Błąd: ${err.message}</div>`;
       }
